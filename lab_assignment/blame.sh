@@ -1,5 +1,8 @@
 #!/bin/bash
 
+DOMAIN=""
+IP=""
+
 # check if there is a first argument
 if [ $# -eq 0 ]
 then
@@ -32,9 +35,7 @@ find_domain_info() {
     
     # search whois for abuse contact
     echo "ABUSE CONTACT"
-    echo ""
     $whois | grep 'Org' | grep -v ":$" | grep 'Abuse'
-    echo ""
 }
 
 whois_grep() {
@@ -42,61 +43,99 @@ whois_grep() {
     local grep_string=$2
     
     # search whois for the given string and important info
-    echo ""
     echo "$grep_string Info"
     echo "$whois_info" | grep $grep_string | grep 'Name'
     echo "$whois_info" | grep $grep_string | grep 'Email'
     echo "$whois_info" | grep $grep_string | grep 'Phone'
-    echo ""
 }
 
-whois_ip() {
+whois_echo() {
     whois_info=`whois $1`
     # search whois for names
-    echo "WHOIS - IP - $1"
-    whois_grep "$whois_info" 'OrgAbuse'
-    whois_grep "$whois_info" 'OrgTech'
-    whois_grep "$whois_info" 'RTech'
+    echo "WHOIS - $1"
+    whois_grep "$whois_info" 'Abuse'
+    whois_grep "$whois_info" 'Admin'
 }
 
-domain=""
-ip=""
+dig_ip() {
+    dig_info=`dig -x $1`
+    # search dig for names
+    echo "DIG - IP - $1"
+    echo "$dig_info" | awk '/ANSWER SECTION:/,/Query time: /' | sed '$d' | sed '1d'
+}
+
+dig_domain() {
+    dig_info=`dig $2 $1`
+    # search dig for names
+    echo "DIG - DOMAIN - $1"
+    echo "$dig_info" | awk '/ANSWER SECTION:/,/Query time: /' | sed '$d' | sed '1d' | head -c -1
+    echo ""
+    # run who is for each ip in dig_info
+    echo "$dig_info" | awk '/ANSWER SECTION:/,/Query time: /' | sed '$d' | sed '1d' | head -c -1 | awk '{print $5}' | while read ip; do
+        whois_echo $ip
+        echo ""
+    done
+}
+
+nslookup_ip() {
+    nslookup_info=`nslookup $1`
+    # search nslookup for names
+    echo "NSLOOKUP - IP - $1"
+    # show first line of nslookup output
+    echo "$nslookup_info" | head -1
+    # extract the nameserver info
+    if echo "$nslookup_info" | grep -oP 'name = \K.*' > /dev/null; then
+        echo "Name Server: $(echo "$nslookup_info" | grep -oP 'name = \K.*')"
+    fi
+}
+
+nslookup_domain() {
+    nslookup_info=`nslookup $1`
+    # search nslookup for names
+    echo "NSLOOKUP - DOMAIN - $1"
+    # show first line of nslookup output
+    echo "$nslookup_info" | head -1
+    # extract Server: IP address from first line
+    server_ip=`echo "$nslookup_info" | head -1 | grep -oP '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'`
+    echo ""
+    whois_echo $server_ip
+}
+
+blame_ip() {
+    echo "IP address: $IP"
+    echo ""
+    whois_echo $IP
+    echo ""
+    dig_ip $IP
+    nslookup_ip $IP
+}
+
+blame_domain() {
+    echo "Domain: $DOMAIN"
+    echo ""
+    whois_echo $DOMAIN
+    echo ""
+    dig_domain $DOMAIN
+    # nslookup_domain $DOMAIN
+}
 
 # check if argument is an IP address
 if valid_ip $1;
 then
-    ip=$1
-    echo "IP address: $ip"
-    echo ""
-    whois_ip $ip
-    echo ""
-    echo "Dig"
-    echo ""
-    dig -x $ip
-    echo ""
-    echo "NSLookup"
-    echo ""
-    nslookup $ip
-    echo ""
-    echo "End"
-    echo ""
+    IP=$1
+    blame_ip
+elif [[ $1 =~ ^[a-zA-Z0-9]+\.[a-zA-Z0-9]+$ ]];
+then
+    DOMAIN=$1
+    blame_domain $DOMAIN
+    # elif check for email
+elif [[ $1 =~ ^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z0-9]+$ ]];
+then
+    echo "Email: $1"
+    # extract domain from email
+    DOMAIN="${1/[^@]*@/}"
+    blame_domain $DOMAIN
+else
+    echo "Argument is not a valid IP, domain, or email"
     exit
 fi
-
-# # check if the argument is an email
-# if [[ $1 =~ ^[^@]+@[^@]+\.[^@ \.]{2,}$ ]]
-# then
-#     # if it is an email, extract the domain
-#     domain=$(echo $1 | sed 's/^.*@//')
-# fi
-
-# # check if the domain is a valid domain
-# if [[ $domain =~ ^[^@ ]+\.[^@ \.]{2,}$ ]]
-# then
-#     # if it is a valid domain, run the whois command
-#     whois $domain
-# else
-#     # if it is not a valid domain, exit
-#     echo "Not a valid domain"
-#     exit
-# fi
