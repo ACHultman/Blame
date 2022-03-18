@@ -1,7 +1,16 @@
 #!/bin/bash
 
+# Author: Adam Hultman
+# Date: 2022-03-18
+# Description: A script to gather abuse contact information about a domain, ip, or email address.
+# Usage: ./adam.sh <domain|ip|email>
+
 DOMAIN=""
 IP=""
+
+exec > logfile.txt
+echo `date`
+echo "arg: $1"
 
 # check if there is a first argument
 if [ $# -eq 0 ]
